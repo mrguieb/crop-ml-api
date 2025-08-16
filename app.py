@@ -6,30 +6,49 @@ import os
 # ----------------------------
 # Load your ML model
 # ----------------------------
-# Make sure your trained model file (e.g., model.pkl) is in the project root
 model = joblib.load("model.pkl")  # replace with your model filename
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all origins
 
 # ----------------------------
-# Helper: map frontend names to model features
+# Feature configuration
 # ----------------------------
-def map_features(data):
-    mapping = {
-        "nitrogen": "N",
-        "phosphorus": "P",
-        "potassium": "K",
-        "ph": "pH",
-        "temperature": "temperature",
-        "humidity": "humidity",
-        "rainfall": "rainfall"
-    }
+FEATURES = ["N", "P", "K", "pH", "temperature", "humidity", "rainfall"]
+
+# Map frontend names to model names
+NAME_MAP = {
+    "nitrogen": "N",
+    "phosphorus": "P",
+    "potassium": "K",
+    "ph": "pH",
+    "temperature": "temperature",
+    "humidity": "humidity",
+    "rainfall": "rainfall"
+}
+
+# Default values if a property is missing
+DEFAULTS = {
+    "N": 0,
+    "P": 0,
+    "K": 0,
+    "pH": 6.5,
+    "temperature": 25,
+    "humidity": 70,
+    "rainfall": 100
+}
+
+# ----------------------------
+# Prepare input for model
+# ----------------------------
+def prepare_input(data):
     mapped = {}
-    for k, v in data.items():
-        if k in mapping:
-            mapped[mapping[k]] = v
-    return mapped
+    for f in FEATURES:
+        # Try frontend name mapping first
+        rev_map = {v:k for k,v in NAME_MAP.items()}
+        frontend_name = rev_map.get(f, f)
+        mapped[f] = data.get(frontend_name, data.get(f, DEFAULTS[f]))
+    return [mapped[f] for f in FEATURES]
 
 # ----------------------------
 # Manual prediction endpoint
@@ -38,10 +57,9 @@ def map_features(data):
 def predict():
     try:
         data = request.get_json()
-        mapped = map_features(data)
-        # Ensure order matches training features if needed
-        prediction = model.predict([list(mapped.values())])
-        return jsonify({"recommended_crop": prediction[0]})
+        X = [prepare_input(data)]
+        pred = model.predict(X)[0]
+        return jsonify({"recommended_crop": pred})
     except Exception as e:
         return jsonify({"error": str(e)})
 
@@ -54,9 +72,9 @@ def predict_geojson():
         geo = request.get_json()
         for feat in geo.get("features", []):
             props = feat.get("properties", {})
-            mapped = map_features(props)
+            X = [prepare_input(props)]
             try:
-                pred = model.predict([list(mapped.values())])[0]
+                pred = model.predict(X)[0]
                 props["recommended_crop"] = pred
             except Exception as e:
                 props["recommended_crop_error"] = str(e)
