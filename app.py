@@ -4,11 +4,12 @@ import joblib
 import os
 import numpy as np
 
-# Load your trained ML model
-model = joblib.load("model.pkl")  # Replace with your model filename
+# Load trained ML model and LabelEncoder
+model = joblib.load("model.pkl")          # your trained model
+le = joblib.load("label_encoder.pkl")     # label encoder used during training
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all origins
+CORS(app)
 
 # Model features
 FEATURES = ["N", "P", "K", "pH", "temperature", "humidity", "rainfall"]
@@ -39,8 +40,7 @@ DEFAULTS = {
 def prepare_input(data):
     mapped = {}
     for f in FEATURES:
-        # Check if frontend name exists
-        rev_map = {v:k for k,v in NAME_MAP.items()}
+        rev_map = {v: k for k, v in NAME_MAP.items()}
         frontend_name = rev_map.get(f, f)
         mapped[f] = data.get(frontend_name, data.get(f, DEFAULTS[f]))
     return [mapped[f] for f in FEATURES]
@@ -61,9 +61,10 @@ def predict():
     try:
         data = request.get_json()
         X = [prepare_input(data)]
-        pred = model.predict(X)[0]
-        pred = to_native(pred)
-        return jsonify({"recommended_crop": pred})
+        pred_num = model.predict(X)[0]
+        pred_num = to_native(pred_num)
+        pred_name = le.inverse_transform([pred_num])[0]  # map number -> crop name
+        return jsonify({"recommended_crop": pred_name})
     except Exception as e:
         return jsonify({"error": str(e)})
 
@@ -83,9 +84,9 @@ def predict_geojson():
                     del props[k]
             X = [prepare_input(props)]
             try:
-                pred = model.predict(X)[0]
-                pred = to_native(pred)
-                props["recommended_crop"] = pred
+                pred_num = model.predict(X)[0]
+                pred_num = to_native(pred_num)
+                props["recommended_crop"] = le.inverse_transform([pred_num])[0]
             except Exception as e:
                 props["recommended_crop_error"] = str(e)
             feat["properties"] = props
