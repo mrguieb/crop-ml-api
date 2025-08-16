@@ -1,12 +1,13 @@
 from flask import Flask, request, jsonify
 import joblib
 import pandas as pd
-
+from flask_cors import CORS
 # Load trained model
 model = joblib.load("model.pkl")   # make sure the filename matches your saved model
 
 # Create Flask app
 app = Flask(__name__)
+CORS(app)  # <- enable all origins (for testing)
 
 @app.route("/")
 def home():
